@@ -1,3 +1,7 @@
+# Warning!
+
+This project is provided as is and still in heavy development.
+
 # Ember-data-primus
 
 This README outlines the details of collaborating on this Ember addon.
