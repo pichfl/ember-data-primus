@@ -2,5 +2,9 @@
 'use strict';
 
 module.exports = {
-  name: 'ember-data-primus'
+  name: 'ember-data-primus',
+
+  isDevelopingAddon: function() {
+    return true;
+  }
 };
