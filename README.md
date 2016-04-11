@@ -1,6 +1,8 @@
 # Warning!
 
-This project is provided as is and still in heavy development.
+This project is provided as is and still in heavy development. 
+
+**DO NOT USE IN PRODUCTION**
 
 # Ember-data-primus
 
