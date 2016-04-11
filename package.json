@@ -1,7 +1,7 @@
 {
   "name": "ember-data-primus",
-  "version": "0.0.0",
-  "description": "The default blueprint for ember-cli addons.",
+  "version": "0.1.0",
+  "description": "Ember Data Adapter (and services) for Primus.io WebSockets",
   "directories": {
     "doc": "doc",
     "test": "tests"

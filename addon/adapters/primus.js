@@ -2,7 +2,7 @@ import DS from 'ember-data';
 import Ember from 'ember';
 import Primus from 'primus';
 
-const { computed, RSVP, Logger } = Ember;
+const { RSVP, Logger, on } = Ember;
 
 export default DS.JSONAPIAdapter.extend({
   primus: null,
@@ -13,6 +13,10 @@ export default DS.JSONAPIAdapter.extend({
   shouldReloadRecord: () => true,
 
   token: null,
+
+  onInit: on('init', function() {
+    Logger.info(this.get('host'));
+  }),
 
   writeToChannel(store, type, message) {
     const host = this.get('host');
