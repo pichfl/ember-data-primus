@@ -1,6 +1,6 @@
 {
   "name": "ember-data-primus",
-  "version": "0.1.1",
+  "version": "0.2.0-dev.20160412",
   "description": "Ember Data Adapter (and services) for Primus.io WebSockets",
   "directories": {
     "doc": "doc",
