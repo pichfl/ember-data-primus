@@ -17,5 +17,13 @@ module.exports = {
     }
 
     app.import('vendor/register-version.js');
+  },
+
+  contentFor: function(type, config) {
+    if (type === 'ember-data-primus') {
+      var url = config.primusLibraryUrl || '/primus/primus.js';
+      return `<script src="${url}"></script>`;
+    }
+    return null;
   }
 };
