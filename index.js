@@ -4,9 +4,7 @@
 module.exports = {
   name: 'ember-data-primus',
 
-  isDevelopingAddon: function() {
-    return true;
-  },
+  isDevelopingAddon: () => true,
 
   included: function(app) {
     this._super.included.apply(this, arguments);
