@@ -48,7 +48,6 @@ export default DS.JSONAPIAdapter.extend({
           if (data.data && Object.keys(data.data).length === 0) {
             store.unloadAll(type.modelName);
           } else if (result.promise._state) {
-            store.unloadAll(type.modelName);
             store.pushPayload(data);
           } else {
             result.resolve(data);
