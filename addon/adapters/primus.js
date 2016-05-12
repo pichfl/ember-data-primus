@@ -1,6 +1,6 @@
+/* global Primus */
 import DS from 'ember-data';
 import Ember from 'ember';
-// import Primus from 'primus';
 
 const { RSVP, Logger, on } = Ember;
 
