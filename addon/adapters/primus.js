@@ -2,139 +2,164 @@
 import DS from 'ember-data';
 import Ember from 'ember';
 
-const { RSVP, Logger, on } = Ember;
+const { computed, RSVP, Logger, on, makeArray } = Ember;
 
 export default DS.JSONAPIAdapter.extend({
-  primus: null,
-  channels: {},
-  coalesceFindRequests: true,
-  shouldReloadAll: () => true,
-  shouldBackgroundReloadRecord: () => true,
-  shouldReloadRecord: () => true,
+	channels: {},
+	coalesceFindRequests: true,
+	shouldReloadAll: () => true,
+	shouldBackgroundReloadRecord: () => true,
+	shouldReloadRecord: () => true,
 
-  token: null,
+	host: null,
+	token: localStorage.getItem('com.anfema.api.token') || 'aaaaa', //@TODO properly retrieve token via ESA
 
-  onInit: on('init', function() {
-    Logger.info(this.get('host'));
-  }),
+	onInit: on('init', function() {
+		Logger.info(this.get('host'));
+	}),
 
-  writeToChannel(store, type, message) {
-    const host = this.get('host');
-    const channels = this.get('channels');
-    const result = RSVP.defer();
-    const path = this.pathForType(type.modelName);
+	primus: computed(function() {
+		let primus = this.get('_primus');
 
-    let primus = this.get('primus');
-    let channel = channels[path];
+		if (primus) {
+			return primus;
+		}
 
-    result.promise.label = path;
+		const host = this.get('host');
 
-    if (!primus) {
-      primus = Primus.connect(`${host}?token=${this.get('token')}`);
-      this.set('primus', primus);
+		primus = Primus.connect(`${host}?token=${this.get('token')}`, {
+			reconnect: {
+				max: Infinity,
+				min: 500,
+				retries: 30,
+			}
+		});
 
-      primus.on('open', () => Logger.info('Primus connected'));
-      primus.on('reconnect scheduled', opts => {
-        Logger.info('Reconnecting in %d ms', opts.scheduled);
-        Logger.info('This is attempt %d out of %d', opts.attempt, opts.retries);
-      });
-    }
+		primus.on('open', () => Logger.info('Primus: Connected'));
+		primus.on('reconnect scheduled', opts => {
+			Logger.info('Primus: Reconnecting in %d ms', opts.scheduled);
+			Logger.info('Primus: This is attempt %d out of %d', opts.attempt, opts.retries);
+		});
+		primus.on('reconnected', () => Logger.info('Primus: Reconnected'));
 
-    if (!channel) {
-      channel = primus.channel(path);
+		// Register data dispatch here as well, don't use channels, connect streams.
+		primus.on('data', data => this.pipe(data));
 
-      channel.on('data', data => {
-        Ember.run.next(() => {
-          if (data.data && Object.keys(data.data).length === 0) {
-            store.unloadAll(type.modelName);
-          } else if (result.promise._state) {
-            store.unloadAll(type.modelName);
-            store.pushPayload(data);
-          } else {
-            result.resolve(data);
-          }
-        });
-      });
+		return primus;
+	}),
 
-      channels[path] = channel;
-    }
+	pipe(data) {
+		if (data.emit) {
+			let [method, message] = data.emit;
+			method = (method || '').toLowerCase();
 
-    channel.write(message);
+			if (method === 'push') {
+				this.store.pushPayload(message);
+			}
 
-    return result.promise;
-  },
+			if (method === 'delete') {
+				message = makeArray(message);
 
-  findAll(store, type) {
-    return this.writeToChannel(store, type);
-  },
+				message.forEach(itemToDelete => {
+					const modelName = this.modelNameFromPayloadKey(itemToDelete.type);
+					const record = store.peekRecord(modelName, itemToDelete.id);
 
-  findRecord(store, type, id) {
-    return this.writeToChannel(store, type, {
-      data: {
-        id,
-      },
-    });
-  },
+					if (record) {
+						record.rollbackAttributes();
+						this.store.unloadRecord(post);
+					}
+				});
+			}
+		}
+	},
 
-  findMany(store, type, ids) {
-    return this.writeToChannel(store, type, {
-      data: {
-        filter: {
-          id: ids.join(','),
-        },
-      },
-    });
-  },
+	modelNameFromPayloadKey(key) {
+		return Ember.String.singularize(key);
+	},
 
-  findHasMany(store, snapshot, url) {
-    Logger.log('findHasMany', store, snapshot, url);
+	write(store, type, data = null) {
+		const primus = this.get('primus');
+		const serializer = store.serializerFor(type.modelName);
 
-    return RSVP.resolve({
-      data: [],
-    });
-  },
+		primus.emit('GET', {
+			type: serializer.payloadKeyFromModelName(type.modelName),
+			data,
+		});
 
-  findBelongsTo(store, snapshot, url) {
-    Logger.log('findBelongsTo', store, snapshot, url);
+		return RSVP.reject();
+	},
 
-    return RSVP.resolve({
-      data: [],
-    });
-  },
+	findAll(store, type) {
+		return this.write(store, type);
+	},
 
-  query(store, type, query) {
-    return this.writeToChannel(store, type, {
-      data: query,
-    });
-  },
+	findRecord(store, type, id) {
+		return this.write(store, type, {
+			data: {
+				id,
+			},
+		});
+	},
 
-  queryRecord(store, type, query) {
-    Logger.log('queryRecord', store, type, query);
+	findMany(store, type, ids) {
+		return this.write(store, type, {
+			data: {
+				filter: {
+					id: ids.join(','),
+				},
+			},
+		});
+	},
 
-    return this._super(...arguments);
-  },
+	findHasMany(store, snapshot, url) {
+		Logger.log('findHasMany', store, snapshot, url);
 
-  pathForType(modelName) {
-    const dasherized = Ember.String.dasherize(modelName || '');
+		return RSVP.resolve({
+			data: [],
+		});
+	},
 
-    return Ember.String.pluralize(dasherized);
-  },
+	findBelongsTo(store, snapshot, url) {
+		Logger.log('findBelongsTo', store, snapshot, url);
 
-  _buildURL(modelName) {
-    if (!modelName) {
-      return '';
-    }
+		return RSVP.resolve({
+			data: [],
+		});
+	},
 
-    return this.pathForType(modelName);
-  },
+	query(store, type, query) {
+		return this.write(store, type, {
+			data: query,
+		});
+	},
 
-  groupRecordsForFindMany(store, snapshots) {
-    return [snapshots];
-  },
+	queryRecord(store, type, query) {
+		Logger.log('queryRecord', store, type, query);
 
-  ajax(/* url, type, options */) {
-    Logger.log('ajax', ...arguments);
+		return this._super(...arguments);
+	},
 
-    return RSVP.reject();
-  },
+	pathForType(modelName) {
+		const dasherized = Ember.String.dasherize(modelName || '');
+
+		return Ember.String.pluralize(dasherized);
+	},
+
+	_buildURL(modelName) {
+		if (!modelName) {
+			return '';
+		}
+
+		return this.pathForType(modelName);
+	},
+
+	groupRecordsForFindMany(store, snapshots) {
+		return [snapshots];
+	},
+
+	ajax(/* url, type, options */) {
+		Logger.log('ajax', ...arguments);
+
+		return RSVP.reject();
+	},
 });
