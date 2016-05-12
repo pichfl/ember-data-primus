@@ -81,10 +81,7 @@ export default DS.JSONAPIAdapter.extend({
 		const primus = this.get('primus');
 		const serializer = store.serializerFor(type.modelName);
 
-		primus.emit('GET', {
-			type: serializer.payloadKeyFromModelName(type.modelName),
-			data,
-		});
+		primus.emit(`GET ${serializer.payloadKeyFromModelName(type.modelName)}`, data);
 
 		return RSVP.reject();
 	},
